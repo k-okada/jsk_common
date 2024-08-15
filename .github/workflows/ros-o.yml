@@ -1,0 +1,40 @@
+on: [push, pull_request]
+
+jobs:
+
+  test:
+    runs-on: ubuntu-latest
+    name: ros-o-jammy
+
+    container: ubuntu:22.04
+
+    steps:
+      - name: Chcekout
+        uses: actions/checkout@v4
+        with:
+          path: src
+      - name: Setup basic packages
+        run: |
+          apt update -qq
+          DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -y install tzdata
+          apt install -qq -y git ca-certificates sudo python3-pip
+          pip3 install catkin-tools
+      - name: Setup ROS-O repository, see https://github.com/k-okada/ros-o-builder/tree/jammy-one
+        run: |
+          echo "deb [trusted=yes] https://raw.githubusercontent.com/v4hn/ros-o-builder/jammy-one/ ./" | sudo tee /etc/apt/sources.list.d/v4hn_ros-o-builder.list
+          sudo apt update -qq
+          sudo apt install -qq -y python3-rosdep2
+          echo "yaml https://raw.githubusercontent.com/v4hn/ros-o-builder/jammy-one/local.yaml debian" | sudo tee /etc/ros/rosdep/sources.list.d/1-v4hn_ros-o-builder.list
+          rosdep update
+      - name: Install catkin_virtualenv
+        run:
+          (cd src; git clone https://github.com/locusrobotics/catkin_virtualenv -b 0.12.0)
+      - name: Install dependencies
+        run: rosdep install --from-paths src --ignore-src --rosdistro debian -r -y || echo "OK"
+      - name: Build source
+        run: |
+          source /opt/ros/one/setup.bash
+          catkin build --no-status --summarize
+        shell: bash
+      - name: Check rosdep dependencies
+        run: rosdep install -s --from-paths src --ignore-src --rosdistro debian -r
