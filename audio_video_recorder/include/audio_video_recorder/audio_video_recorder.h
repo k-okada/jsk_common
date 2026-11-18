@@ -40,6 +40,9 @@ namespace audio_video_recorder
   {
     public:
       AudioVideoRecorder() {}
+#if ROS_VERSION_MAJOR != 1
+      ~AudioVideoRecorder();
+#endif
 
       typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, audio_common_msgs::AudioData> ExactSyncPolicy;
       typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, audio_common_msgs::AudioData> ApproximateSyncPolicy;

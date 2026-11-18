@@ -242,6 +242,19 @@ namespace audio_video_recorder
         std::bind(&AudioVideoRecorder::callbackAudio, this, std::placeholders::_1));
   }
 
+#if ROS_VERSION_MAJOR != 1
+  AudioVideoRecorder::~AudioVideoRecorder()
+  {
+    // ROS1_ROS2_COMPAT::g_node, set by initialize(), is a global and would otherwise keep the node alive until the
+    // exit handlers, which destroy it after the middleware (e.g. Fast DDS) is already gone, and the node crashes at
+    // shutdown (std::system_error, SIGABRT), as image_view2 did. Release it with the recorder, so that the node is
+    // destroyed at the end of main().
+    if (ROS1_ROS2_COMPAT::g_node == _nh) {
+      ROS1_ROS2_COMPAT::g_node.reset();
+    }
+  }
+
+#endif
   void AudioVideoRecorder::callbackImage(const sensor_msgs::ImageConstPtr &image_msg)
   {
     GstFlowReturn ret;
