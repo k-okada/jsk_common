@@ -115,7 +115,14 @@ class ConnectionBasedTransport(MetaConnectionBasedTransport(
                 if self._verbose_connection:
                     ros.loginfo(self, 'Subscribe input topics.')
                 if not self._active:
-                    self.trigger_activate()
+                    try:
+                        self.trigger_activate()
+                    except Exception as e:  # RCLError of an invalid transition
+                        ros.logdebug(self, 'Cannot activate: {}'.format(e))
+                    if not self._active:
+                        # e.g. after cleanup or shutdown: no input processing
+                        # while the publishers are disabled
+                        return
                 self._subscribe()
                 self._connection_status = SUBSCRIBED
                 self._ever_subscribed = True

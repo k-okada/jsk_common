@@ -135,6 +135,19 @@ class TestConnectionBasedTransportROS2(unittest.TestCase):
         self.assertFalse(relay.is_subscribed())
         self.assertIsNone(relay.sub)
 
+    def test_no_subscribe_after_shutdown(self):
+        relay = self.add_node(Relay())
+        relay.trigger_shutdown()
+        client = self.add_node(rclpy.create_node('client'))
+        client.create_subscription(
+            String, '/relay/output', lambda msg: None, 1)
+        self.assertTrue(self.spin_until(
+            lambda: relay.pub.get_subscription_count() > 0))
+        self.spin_until(lambda: False, 0.5)
+        self.assertFalse(relay.is_subscribed())
+        self.assertFalse(relay.is_active())
+        self.assertIsNone(relay.sub)
+
     def test_no_publishers(self):
         class NoPublisher(ConnectionBasedTransport):
             def subscribe(self):
