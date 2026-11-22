@@ -129,6 +129,33 @@ class TestRospyRclpyCompat(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 message_filters.Subscriber('/compat_test/x', String)
 
+    @unittest.skipIf(ROS_VERSION != 2, 'the default node of ROS2')
+    def test_default_node_per_thread(self):
+        # default_node() of a thread does not change the default node of
+        # another, and the blocks restore the ones outside them
+        other = object()
+        entered, leave = threading.Event(), threading.Event()
+        seen = []
+
+        def other_thread():
+            with ros_compat.default_node(other):
+                entered.set()
+                leave.wait(5)
+                seen.append(ros_compat.get_default_node())
+
+        thread = threading.Thread(target=other_thread)
+        with ros_compat.default_node(self.node):
+            thread.start()
+            self.assertTrue(entered.wait(5))
+            self.assertIs(ros_compat.get_default_node(), self.node)
+            with ros_compat.default_node(None):
+                self.assertIsNone(ros_compat.get_default_node())
+            self.assertIs(ros_compat.get_default_node(), self.node)
+            leave.set()
+            thread.join(5)
+        self.assertEqual(seen, [other])
+        self.assertIs(ros_compat.get_default_node(), ros_compat._default_node)
+
     def test_log_once_and_throttle_per_call_site(self):
         logged = []
         orig = ros_compat.loginfo

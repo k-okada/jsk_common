@@ -17,6 +17,7 @@ jsk_common package, so depending on it never risks a dependency cycle.
 """
 import contextlib
 import os
+import threading
 import time
 
 import tf2_ros
@@ -38,26 +39,33 @@ else:
 
 
 # the node with which message_filters.Subscriber subscribes when given the
-# arguments of ROS1 (topic, msg_type, ...) on ROS2: the one of init_node(),
-# or the one of default_node(), e.g. a ConnectionBasedTransport of
-# jsk_topic_tools in its subscribe()
+# arguments of ROS1 (topic, msg_type, ...) on ROS2: the one of default_node()
+# in the block of the thread, e.g. a ConnectionBasedTransport of
+# jsk_topic_tools in its subscribe(), or else the one of init_node()
 _default_node = None
+# the nodes of default_node(), per thread: the callbacks of a
+# MultiThreadedExecutor run in threads of their own
+_default_node_stack = threading.local()
 
 
 def get_default_node():
+    stack = getattr(_default_node_stack, 'nodes', None)
+    if stack:
+        return stack[-1]
     return _default_node
 
 
 @contextlib.contextmanager
 def default_node(node):
-    """Make node the default node in the block."""
-    global _default_node
-    previous = _default_node
-    _default_node = node
+    """Make node the default node in the block, in this thread."""
+    stack = getattr(_default_node_stack, 'nodes', None)
+    if stack is None:
+        stack = _default_node_stack.nodes = []
+    stack.append(node)
     try:
         yield node
     finally:
-        _default_node = previous
+        stack.pop()
 
 
 def _patch_message_filters():
@@ -78,7 +86,7 @@ def _patch_message_filters():
     def __init__(self, *args, **kwargs):
         if args and isinstance(args[0], str):
             topic, msg_type = args[0], args[1]
-            node = _default_node
+            node = get_default_node()
             if node is None:
                 raise RuntimeError(
                     'message_filters.Subscriber({}, ...) of ROS1 needs a '
