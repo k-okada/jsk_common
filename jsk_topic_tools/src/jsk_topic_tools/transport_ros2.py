@@ -69,7 +69,9 @@ class ConnectionBasedTransport(MetaConnectionBasedTransport(
                 ' Have you called ConnectionBasedTransport.advertise?')
         self.trigger_configure()
         if self._always_subscribe:
-            self.trigger_activate()
+            if not self._activate():
+                ros.logwarn(self, 'Cannot activate, so not subscribing')
+                return
             self._subscribe()
             self._connection_status = SUBSCRIBED
             self._ever_subscribed = True
@@ -94,6 +96,15 @@ class ConnectionBasedTransport(MetaConnectionBasedTransport(
     def unsubscribe(self):
         raise NotImplementedError
 
+    def _activate(self):
+        """Activate unless active; whether it is active."""
+        if not self._active:
+            try:
+                self.trigger_activate()
+            except Exception as e:  # RCLError of an invalid transition
+                ros.logdebug(self, 'Cannot activate: {}'.format(e))
+        return self._active
+
     def _subscribe(self):
         # message_filters.Subscriber(topic, msg_type) of ROS1 in subscribe()
         # subscribes with this node (jsk_ros1_ros2_compat)
@@ -114,15 +125,10 @@ class ConnectionBasedTransport(MetaConnectionBasedTransport(
             if self._connection_status == NOT_SUBSCRIBED:
                 if self._verbose_connection:
                     ros.loginfo(self, 'Subscribe input topics.')
-                if not self._active:
-                    try:
-                        self.trigger_activate()
-                    except Exception as e:  # RCLError of an invalid transition
-                        ros.logdebug(self, 'Cannot activate: {}'.format(e))
-                    if not self._active:
-                        # e.g. after cleanup or shutdown: no input processing
-                        # while the publishers are disabled
-                        return
+                if not self._activate():
+                    # e.g. after cleanup or shutdown: no input processing
+                    # while the publishers are disabled
+                    return
                 self._subscribe()
                 self._connection_status = SUBSCRIBED
                 self._ever_subscribed = True
